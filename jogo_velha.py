@@ -6,6 +6,12 @@ Turn = Literal[1, -1]
 Board = List[List[int]]
 Game = Tuple[Board, Turn]
 
+lookup = {
+    1: "X",
+    -1: "O",
+    0: " ",
+}
+
 
 def min_value(
     state: Game,
@@ -130,11 +136,6 @@ def evaluate_jogo_velha(game: Game) -> float:
 
 
 def print_board(board: Board) -> None:
-    lookup = {
-        1: "X",
-        -1: "O",
-        0: " ",
-    }
     for line in board:
         print([lookup[s] for s in line])
 
