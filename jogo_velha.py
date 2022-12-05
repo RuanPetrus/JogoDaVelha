@@ -1,53 +1,64 @@
-from typing import Callable
-import math
+from functools import partial
+from typing import Callable, List, Tuple, Optional, Literal
 
-Turn = int
-Board = list[list[int]]
-Game = tuple[Board, Turn]
+Player = Literal[-1, 0, 1]
+Turn = Literal[1, -1]
+Board = List[List[int]]
+Game = Tuple[Board, Turn]
 
-def min_value(state: Game, 
-            evaluate_fn: Callable[[Game], float], 
-            branch_fn: Callable[[Game], list[Game]]
-           ) -> tuple[Game, float]:
+
+def min_value(
+    state: Game,
+    evaluate_fn: Callable[[Game], float],
+    branch_fn: Callable[[Game], List[Game]],
+) -> float:
+
     next_states = branch_fn(state)
 
     if len(next_states) == 0:
-        return state, evaluate_fn(state)
+        return evaluate_fn(state)
 
-    _, value = max_value(next_states[0], evaluate_fn, branch_fn)
-    n_state = next_states[0]
+    max_value_fn = partial(max_value, evaluate_fn=evaluate_fn, branch_fn=branch_fn)
+    return min(map(max_value_fn, next_states))
 
-    for i in range(1, len(next_states)):
-        _, v = max_value(next_states[i], evaluate_fn, branch_fn)
-        if v < value:
-            value = v
-            n_state = next_states[i]
 
-    return n_state, value
+def max_value(
+    state: Game,
+    evaluate_fn: Callable[[Game], float],
+    branch_fn: Callable[[Game], List[Game]],
+) -> float:
 
-def max_value(state: Game, 
-            evaluate_fn: Callable[[Game], float], 
-            branch_fn: Callable[[Game], list[Game]]
-           ) -> tuple[Game, float]:
     next_states = branch_fn(state)
 
     if len(next_states) == 0:
-        return state, evaluate_fn(state)
+        return evaluate_fn(state)
 
-    _, value = min_value(next_states[0], evaluate_fn, branch_fn)
-    n_state = next_states[0]
+    min_value_fn = partial(min_value, evaluate_fn=evaluate_fn, branch_fn=branch_fn)
+    return max(map(min_value_fn, next_states))
 
-    for i in range(1, len(next_states)):
-        s, v = min_value(next_states[i], evaluate_fn, branch_fn)
-        if v > value:
-            value = v
-            n_state = next_states[i]
-
-    return n_state, value
 
 def jogo_velha_min_max(game: Game) -> Board:
-    best_move, _ = max_value(game, evaluate_jogo_velha, branch_jogo_velha)
-    return best_move[0]
+    _, turn = game
+
+    assert turn == 1 or turn == -1, "Turn must be 1 or -1"
+
+    if turn == 1:
+        min_value_fn = partial(
+            min_value, evaluate_fn=evaluate_jogo_velha, branch_fn=branch_jogo_velha
+        )
+
+        possible_games = max(
+            map(lambda g: (min_value_fn(g), g), branch_jogo_velha(game))
+        )
+    else:
+        max_value_fn = partial(
+            max_value, evaluate_fn=evaluate_jogo_velha, branch_fn=branch_jogo_velha
+        )
+        possible_games = min(
+            map(lambda g: (max_value_fn(g), g), branch_jogo_velha(game))
+        )
+
+    return possible_games[1][0]
 
 
 def copy_board(board: Board) -> Board:
@@ -60,12 +71,13 @@ def copy_board(board: Board) -> Board:
 
     return new_b
 
-def branch_jogo_velha(game: Game) ->list[Game]:
-    board, turn = game
-    new_games: list[Game] = [] 
 
-    # Test if game is over
-    if (evaluate_jogo_velha(game) != 0):
+def branch_jogo_velha(game: Game) -> List[Game]:
+    board, turn = game
+    new_games: List[Game] = []
+
+    # If game is over return [] leaf node
+    if get_winner(board) is not None:
         return new_games
 
     for i in range(len(board)):
@@ -73,57 +85,73 @@ def branch_jogo_velha(game: Game) ->list[Game]:
             if board[i][j] == 0:
                 new_b = copy_board(board)
                 new_b[i][j] = turn
-                new_games.append((new_b, turn * -1))
+                new_games.append((new_b, -turn))
 
     return new_games
 
+
+def get_winner(board: Board) -> Optional[Player]:
+    def is_board_complete() -> bool:
+        zero_squares = [s for line in board for s in line if s == 0]
+        return len(zero_squares) == 0
+
+    vertical = [[board[i][j] for i in range(len(board[0]))] for j in range(len(board))]
+    horizontal = board
+    diagonal = [
+        [board[i][i] for i in range(len(board))],
+        [board[i][abs(i - 2)] for i in range(len(board))],
+    ]
+
+    result = [
+        line
+        for line in vertical + horizontal + diagonal
+        if sum(line) == 3 or sum(line) == -3
+    ]
+
+    if len(result) == 0:
+        if is_board_complete():
+            return 0
+        return None
+
+    if result[0][0] == -1:
+        return -1
+
+    return 1
+
+
 def evaluate_jogo_velha(game: Game) -> float:
-    board, turn = game
+    board, _ = game
+    result = get_winner(board)
 
-    for i in range(len(board[0])):
-        line_sum = 0
-        for j in range(len(board)):
-            line_sum += board[j][i]
+    if result is None:
+        raise ValueError("Game is not finished")
 
-        if line_sum == -3:
-            return -1
+    return result
 
-        if line_sum == 3:
-            return 1
-
-    for line in board:
-       if sum(line) == -3:
-            return -1
-
-       if sum(line) == 3:
-            return 1
-    
-    diag_sum = board[0][0] + board[1][1] + board[2][2]
-    if diag_sum == -3:
-        return -1
-    if diag_sum == 3:
-        return 1
-
-    diag_sum = board[0][2] + board[1][1] + board[2][0]
-    if diag_sum == -3:
-        return -1
-    if diag_sum == 3:
-        return 1
-
-    return 0
 
 def print_board(board: Board) -> None:
+    lookup = {
+        1: "X",
+        -1: "O",
+        0: " ",
+    }
     for line in board:
-        print(line)
+        print([lookup[s] for s in line])
+
 
 def main() -> None:
-    board = [
-                [ 1,  1, -1],
-                [-1, -1,  0],
-                [ 1,  0,  0],
-             ]
-        
-    print_board(jogo_velha_min_max((board, 1)))
+    board: Board = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ]
+    turn = 1
+    while get_winner(board) is None:
+        board = jogo_velha_min_max((board, turn))
+        turn = -turn
+        print_board(board)
+        print("------------------")
+
 
 if __name__ == "__main__":
     main()
