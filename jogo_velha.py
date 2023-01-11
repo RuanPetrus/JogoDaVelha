@@ -48,23 +48,21 @@ def jogo_velha_min_max(game: Game) -> Board:
 
     assert turn == 1 or turn == -1, "Turn must be 1 or -1"
 
+    best_game: Tuple[float, Game]
+
     if turn == 1:
         min_value_fn = partial(
             min_value, evaluate_fn=evaluate_jogo_velha, branch_fn=branch_jogo_velha
         )
 
-        possible_games = max(
-            map(lambda g: (min_value_fn(g), g), branch_jogo_velha(game))
-        )
+        best_game = max(map(lambda g: (min_value_fn(g), g), branch_jogo_velha(game)))
     else:
         max_value_fn = partial(
             max_value, evaluate_fn=evaluate_jogo_velha, branch_fn=branch_jogo_velha
         )
-        possible_games = min(
-            map(lambda g: (max_value_fn(g), g), branch_jogo_velha(game))
-        )
+        best_game = min(map(lambda g: (max_value_fn(g), g), branch_jogo_velha(game)))
 
-    return possible_games[1][0]
+    return best_game[1][0]
 
 
 def copy_board(board: Board) -> Board:
@@ -146,10 +144,10 @@ def main() -> None:
         [0, 0, 0],
         [0, 0, 0],
     ]
-    turn = 1
+    turn: Literal[1, -1] = 1
     while get_winner(board) is None:
         board = jogo_velha_min_max((board, turn))
-        turn = -turn
+        turn = 1 if turn == -1 else -1
         print_board(board)
         print("------------------")
 
